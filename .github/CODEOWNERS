@@ -1,4 +1,4 @@
 # https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/about-code-owners
-# .github/* @onedr0p @bjw-s @JJGadgets # original pipeline code written by them
-* @mrkhachaturov
-@mrkhachaturov
+# .github/* @onedr0p @bjw-s # original pipeline code written by them
+* @mrkhachaturov # professional yoinker, makes OCD edits to perfectly working code
+apps/redbot/* @mrkhachaturov @MegaShinySnivy
