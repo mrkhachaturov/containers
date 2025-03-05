@@ -23,6 +23,7 @@ jobs:
             cue:
               - metadata.rules.cue
               - apps/**/metadata.yaml
+              - apps/**/metadata.json
 
       - name: Setup CUE
         if: ${{ steps.changed-files.outputs.cue_any_changed == 'true' }}
@@ -34,3 +35,4 @@ jobs:
         shell: bash
         run: |
           find ./apps/ -name metadata.yaml | xargs -I {} cue vet --schema '#Spec' {} ./metadata.rules.cue
+          find ./apps/ -name metadata.json | xargs -I {} cue vet --schema '#Spec' {} ./metadata.rules.cue
