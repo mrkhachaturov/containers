@@ -2,6 +2,8 @@
 import importlib.util
 import sys
 import os
+import stat  # Import stat module for file permissions  
+
 
 import json
 import yaml
@@ -31,9 +33,16 @@ def get_latest_version_py(latest_py_path, channel_name):
     spec.loader.exec_module(latest)
     return latest.get_latest(channel_name)
 
-def get_latest_version_sh(latest_sh_path, channel_name):
-    out = check_output([latest_sh_path, channel_name])
-    return out.decode("utf-8").strip()
+def get_latest_version_sh(latest_sh_path, channel_name):  
+    # Check and set execute permissions if not already set  
+    if not os.access(latest_sh_path, os.X_OK):  # Check if the file is executable  
+        os.chmod(latest_sh_path,   
+                  stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR |  # Owner: read, write, execute  
+                  stat.S_IRGRP | stat.S_IWGRP | stat.S_IXGRP |  # Group: read, write, execute  
+                  stat.S_IROTH | stat.S_IWOTH | stat.S_IXOTH)   # Others: read, write, execute  
+
+    out = check_output([latest_sh_path, channel_name])  
+    return out.decode("utf-8").strip() 
 
 def get_latest_version(subdir, channel_name):
     ci_dir =  os.path.join(subdir, "ci")

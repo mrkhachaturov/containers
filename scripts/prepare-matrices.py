@@ -40,11 +40,7 @@ def get_latest_version_sh(latest_sh_path, channel_name):
                   stat.S_IROTH | stat.S_IWOTH | stat.S_IXOTH)   # Others: read, write, execute  
 
     out = check_output([latest_sh_path, channel_name])  
-    return out.decode("utf-8").strip()      
-
-def get_latest_version_sh(latest_sh_path, channel_name):
-    out = check_output([latest_sh_path, channel_name])
-    return out.decode("utf-8").strip()
+    return out.decode("utf-8").strip()  
 
 def get_latest_version(subdir, channel_name):
     ci_dir =  os.path.join(subdir, "ci")
