@@ -34,6 +34,10 @@ on:
         description: The private key of the GitHub App
         required: true
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   prepare:
     name: Prepare to Build
@@ -88,7 +92,7 @@ jobs:
   build-platform-images:
     name: Build/Test ${{ matrix.image.name }} (${{ matrix.image.platform }})
     needs: prepare
-    runs-on: ${{ matrix.image.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     if: ${{ toJSON(fromJSON(needs.prepare.outputs.matrices).imagePlatforms) != '[]' && toJSON(fromJSON(needs.prepare.outputs.matrices).imagePlatforms) != '' }}
     strategy:
       fail-fast: false
@@ -345,6 +349,11 @@ jobs:
     needs: ["prepare", "merge"]
     if: ${{ !cancelled() }}
     steps:
+      - name: Lowercase repository owner
+        shell: bash
+        run: |
+          echo "LOWERCASE_REPO_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
       - name: Check build matrix status
         if: ${{ (inputs.appsToBuild != '' && inputs.appsToBuild != '[]') && (needs.merge.result != 'success' && needs.merge.result != 'skipped' && needs.prepare.result != 'success') }}
         shell: bash

@@ -11,9 +11,10 @@ from subprocess import check_output
 
 from os.path import isfile
 
+# read repository name and repository owner's username from custom env vars, else read from GitHub Actions default env vars
 repo_owner = os.environ.get('REPO_OWNER', os.environ.get('GITHUB_REPOSITORY_OWNER'))
 
-TESTABLE_PLATFORMS = ["linux/amd64", "linux/arm64"]
+TESTABLE_PLATFORMS = ["linux/amd64"]
 
 def load_metadata_file_yaml(file_path):
     with open(file_path, "r") as f:
@@ -41,9 +42,21 @@ def get_latest_version(subdir, channel_name):
     elif os.path.isfile(os.path.join(ci_dir, "latest.sh")):
         return get_latest_version_sh(os.path.join(ci_dir, "latest.sh"), channel_name)
     elif os.path.isfile(os.path.join(subdir, channel_name, "latest.py")):
-       return get_latest_version_py(os.path.join(subdir, channel_name, "latest.py"), channel_name)
+        return get_latest_version_py(os.path.join(subdir, channel_name, "latest.py"), channel_name)
     elif os.path.isfile(os.path.join(subdir, channel_name, "latest.sh")):
         return get_latest_version_sh(os.path.join(subdir, channel_name, "latest.sh"), channel_name)
+    return None
+
+def get_latest_package_version(subdir, channel_name):
+    ci_dir =  os.path.join(subdir, "ci")
+    if os.path.isfile(os.path.join(ci_dir, "pkgver.py")):
+        return get_latest_version_py(os.path.join(ci_dir, "pkgver.py"), channel_name)
+    elif os.path.isfile(os.path.join(ci_dir, "pkgver.sh")):
+        return get_latest_version_sh(os.path.join(ci_dir, "pkgver.sh"), channel_name)
+    elif os.path.isfile(os.path.join(subdir, channel_name, "pkgver.py")):
+        return get_latest_version_py(os.path.join(subdir, channel_name, "pkgver.py"), channel_name)
+    elif os.path.isfile(os.path.join(subdir, channel_name, "pkgver.sh")):
+        return get_latest_version_sh(os.path.join(subdir, channel_name, "pkgver.sh"), channel_name)
     return None
 
 def get_published_version(image_name):
@@ -98,10 +111,11 @@ def get_image_metadata(subdir, meta, forRelease=False, force=False, channels=Non
             toBuild["published_version"] = published
 
         toBuild["version"] = version
+        toBuild["pkgver"] = get_latest_package_version(subdir, channel["name"])
 
         # Image Tags
         toBuild["tags"] = ["rolling", version]
-        if meta.get("semver", False):
+        if meta.get("semantic_versioning", False):
             parts = version.split(".")[:-1]
             while len(parts) > 0:
                 toBuild["tags"].append(".".join(parts))
@@ -125,7 +139,12 @@ def get_image_metadata(subdir, meta, forRelease=False, force=False, channels=Non
             platformToBuild["target_arch"] = target_arch
             platformToBuild["version"] = version
             platformToBuild["channel"] = channel["name"]
-            platformToBuild["label_type"]="org.opencontainers.image"
+            platformToBuild["pkgver"] = toBuild["pkgver"]
+
+            if meta.get("base", False):
+                platformToBuild["label_type"] ="org.opencontainers.image.base"
+            else:
+                platformToBuild["label_type"]="org.opencontainers.image"
 
             if isfile(os.path.join(subdir, channel["name"], "Dockerfile")):
                 platformToBuild["dockerfile"] = os.path.join(subdir, channel["name"], "Dockerfile")
