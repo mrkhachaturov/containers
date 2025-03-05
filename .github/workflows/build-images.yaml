@@ -29,7 +29,7 @@ on:
       BOT_APP_ID:
         description: The App ID of the GitHub App (found in app settings)
         required: true
-      BOT_JWT_PRIVATE_KEY:
+      BOT_APP_PRIVATE_KEY :
         description: The private key of the GitHub App, used for generating JWT tokens, generated in GitHub App settings page, uses the X.509 private key format
         required: true
 
@@ -54,7 +54,7 @@ jobs:
         id: oauth-token
         with:
           app-id: "${{ secrets.BOT_APP_ID }}" # $BOT_APP_ID is found in GitHub App main settings page
-          private-key: "${{ secrets.BOT_JWT_PRIVATE_KEY }}" # $BOT_JWT_PRIVATE_KEY is generated in GitHub App main settings page, uses the X.509 private key format
+          private-key: "${{ secrets.BOT_APP_PRIVATE_KEY  }}" # $BOT_APP_PRIVATE_KEY  is generated in GitHub App main settings page, uses the X.509 private key format
 
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
@@ -145,7 +145,7 @@ jobs:
         id: oauth-token
         with:
           app-id: "${{ secrets.BOT_APP_ID }}" # $BOT_APP_ID is found in GitHub App main settings page
-          private-key: "${{ secrets.BOT_JWT_PRIVATE_KEY }}" # $BOT_JWT_PRIVATE_KEY is generated in GitHub App main settings page, uses the X.509 private key format
+          private-key: "${{ secrets.BOT_APP_PRIVATE_KEY  }}" # $BOT_APP_PRIVATE_KEY  is generated in GitHub App main settings page, uses the X.509 private key format
 
       - name: Checkout
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
