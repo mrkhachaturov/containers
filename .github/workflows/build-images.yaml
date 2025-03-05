@@ -1,5 +1,4 @@
 ---
-# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: "Image Build"
 
 on:
@@ -8,11 +7,11 @@ on:
       appsToBuild:
         required: false
         type: string
-        default: ""
+        default: ''
       channelsToBuild:
         required: false
         type: string
-        default: ""
+        default: ''
       pushImages:
         required: false
         default: false
@@ -28,11 +27,15 @@ on:
         description: Force rebuild
     secrets:
       BOT_APP_ID:
-        description: The App ID of the GitHub App
+        description: The App ID of the GitHub App (found in app settings)
         required: true
-      BOT_APP_PRIVATE_KEY:
-        description: The private key of the GitHub App
+      BOT_JWT_PRIVATE_KEY:
+        description: The private key of the GitHub App, used for generating JWT tokens, generated in GitHub App settings page, uses the X.509 private key format
         required: true
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   prepare:
@@ -43,44 +46,45 @@ jobs:
     steps:
       - name: Lowercase repository owner
         shell: bash
-        run: echo "LOWERCASE_REPO_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+        run: |
+          echo "LOWERCASE_REPO_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "${GITHUB_ENV}"
 
-      - name: Generate Token
-        uses: actions/create-github-app-token@v1
-        id: app-token
+      - name: "Generate Short Lived OAuth App Token (ghs_*)"
+        uses: actions/create-github-app-token@21cfef2b496dd8ef5b904c159339626a10ad380e # v1.11.6
+        id: oauth-token
         with:
-          app-id: "${{ secrets.BOT_APP_ID }}"
-          private-key: "${{ secrets.BOT_APP_PRIVATE_KEY }}"
+          app-id: "${{ secrets.BOT_APP_ID }}" # $BOT_APP_ID is found in GitHub App main settings page
+          private-key: "${{ secrets.BOT_JWT_PRIVATE_KEY }}" # $BOT_JWT_PRIVATE_KEY is generated in GitHub App main settings page, uses the X.509 private key format
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
-          token: "${{ steps.app-token.outputs.token }}"
+          token: "${{ steps.oauth-token.outputs.token }}"
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa # v4.8.0
         with:
           python-version: 3.x
           cache: pip
 
       - name: Install Python Requirements
         shell: bash
-        run: pip install --requirement requirements.txt && pip freeze
+        run: pip install -r ./.github/scripts/requirements.txt && pip freeze
 
       - name: Prepare Matrices
         id: prepare-matrices
         env:
-          TOKEN: ${{ steps.app-token.outputs.token }}
+          TOKEN: ${{ steps.oauth-token.outputs.token }}
         shell: bash
         run: |
           if [[ -z "${{ inputs.appsToBuild }}" ]]; then
-              matrices=$(python ./scripts/prepare-matrices.py "all" "${{ inputs.pushImages }}" "${{ inputs.force }}")
+              matrices=$(python ./.github/scripts/prepare-matrices.py "all" "${{ inputs.pushImages }}" "${{ inputs.force }}")
           else
-              if [[ -z "${{ inputs.channelsToBuild }}" ]]; then
-                  matrices=$(python ./scripts/prepare-matrices.py "${{ inputs.appsToBuild }}" "${{ inputs.pushImages }}" "${{ inputs.force }}")
-              else
-                  matrices=$(python ./scripts/prepare-matrices.py "${{ inputs.appsToBuild }}" "${{ inputs.pushImages }}" "${{ inputs.force }}" "${{ inputs.channelsToBuild }}")
-              fi
+            if [[ -z "${{ inputs.channelsToBuild }}" ]]; then
+              matrices=$(python ./.github/scripts/prepare-matrices.py "${{ inputs.appsToBuild }}" "${{ inputs.pushImages }}" "${{ inputs.force }}")
+            else
+              matrices=$(python ./.github/scripts/prepare-matrices.py "${{ inputs.appsToBuild }}" "${{ inputs.pushImages }}" "${{ inputs.force }}" "${{ inputs.channelsToBuild }}")
+            fi
           fi
           echo "matrices=${matrices}" >> $GITHUB_OUTPUT
           echo "${matrices}"
@@ -88,20 +92,17 @@ jobs:
   build-platform-images:
     name: Build/Test ${{ matrix.image.name }} (${{ matrix.image.platform }})
     needs: prepare
-    runs-on: ${{ matrix.image.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     if: ${{ toJSON(fromJSON(needs.prepare.outputs.matrices).imagePlatforms) != '[]' && toJSON(fromJSON(needs.prepare.outputs.matrices).imagePlatforms) != '' }}
     strategy:
       fail-fast: false
       matrix:
-        image:
-          ["${{ fromJSON(needs.prepare.outputs.matrices).imagePlatforms }}"]
-    permissions:
-      contents: read
-      packages: write
+        image: ["${{ fromJSON(needs.prepare.outputs.matrices).imagePlatforms }}"]
     steps:
       - name: Lowercase repository owner
         shell: bash
-        run: echo "LOWERCASE_REPO_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+        run: |
+          echo "LOWERCASE_REPO_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "${GITHUB_ENV}"
 
       - name: Log Matrix Input
         shell: bash
@@ -109,7 +110,6 @@ jobs:
           cat << EOF
           ${{ toJSON(matrix.image)}}
           EOF
-
       - name: Validate Matrix Input
         shell: bash
         run: |
@@ -140,23 +140,24 @@ jobs:
           echo "${{ matrix.image.name }}" | grep -E "[a-zA-Z0-9_\.\-]+" || "Image Name is invalid"
           echo "${{ matrix.image.version }}" | grep -E "[a-zA-Z0-9_\.\-]+" || "Image Version is invalid"
 
-      - name: Generate Token
-        uses: actions/create-github-app-token@v1
-        id: app-token
+      - name: "Generate Short Lived OAuth App Token (ghs_*)"
+        uses: actions/create-github-app-token@21cfef2b496dd8ef5b904c159339626a10ad380e # v1.11.6
+        id: oauth-token
         with:
-          app-id: "${{ secrets.BOT_APP_ID }}"
-          private-key: "${{ secrets.BOT_APP_PRIVATE_KEY }}"
+          app-id: "${{ secrets.BOT_APP_ID }}" # $BOT_APP_ID is found in GitHub App main settings page
+          private-key: "${{ secrets.BOT_JWT_PRIVATE_KEY }}" # $BOT_JWT_PRIVATE_KEY is generated in GitHub App main settings page, uses the X.509 private key format
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
-          token: "${{ steps.app-token.outputs.token }}"
+          token: "${{ steps.oauth-token.outputs.token }}"
+          fetch-depth: 1
 
       - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
           registry: ghcr.io
           username: "${{ github.actor }}"
@@ -164,9 +165,9 @@ jobs:
 
       - name: Setup Goss
         if: ${{ matrix.image.tests_enabled }}
-        uses: mlipscombe/goss-installation-action@v1.2.2
+        uses: e1himself/goss-installation-action@fbb6fb55d3e59c96045b2500eeb8ce0995d99ac1 # v1.2.1
         with:
-          version: latest
+          version: v0.4.4
 
       - name: Prepare Build Outputs
         id: prepare-build-outputs
@@ -182,16 +183,21 @@ jobs:
           echo "image_name=${image_name}" >> $GITHUB_OUTPUT
           echo "outputs=${outputs}" >> $GITHUB_OUTPUT
 
+
       - name: Build Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         id: build
         with:
           build-args: |-
             VERSION=${{ matrix.image.version }}
+            PKGVER=${{ matrix.image.pkgver }}
             REVISION=${{ github.sha }}
             CHANNEL=${{ matrix.image.channel }}
-          # TODO: Use ${{ matrix.image.context }}, requires updates to all dockerfiles :-(
-          context: .
+            BUILDKIT_SBOM_SCAN_CONTEXT=true
+            BUILDKIT_SBOM_SCAN_STAGE=true
+          sbom: true
+          provenance: mode=max
+          context: . # TODO: Use ${{ matrix.image.context }}, requires updates to all dockerfiles :-(
           platforms: ${{ matrix.image.platform }}
           file: ${{ matrix.image.dockerfile }}
           outputs: ${{ steps.prepare-build-outputs.outputs.outputs }}
@@ -234,9 +240,9 @@ jobs:
 
       - name: Upload Digest
         if: ${{ inputs.pushImages}}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
-          name: ${{ matrix.image.name }}-${{ matrix.image.target_os }}-${{ matrix.image.target_arch }}
+          name: ${{ matrix.image.name }}
           path: /tmp/${{ matrix.image.name }}/*
           if-no-files-found: error
           retention-days: 1
@@ -247,7 +253,7 @@ jobs:
     needs: ["prepare", "build-platform-images"]
     # Always run merge, as the prior matrix is all or nothing. We test for prior step failure
     # in the "Test Failed Bit" step. This ensures if one app fails, others can still complete.
-    if: ${{ !cancelled() && inputs.pushImages && toJSON(fromJSON(needs.prepare.outputs.matrices).images) != '[]' && toJSON(fromJSON(needs.prepare.outputs.matrices).images) != '' }}
+    if: ${{ always() && inputs.pushImages && toJSON(fromJSON(needs.prepare.outputs.matrices).images) != '[]' && toJSON(fromJSON(needs.prepare.outputs.matrices).images) != '' }}
     strategy:
       matrix:
         image: ["${{ fromJSON(needs.prepare.outputs.matrices).images }}"]
@@ -255,13 +261,13 @@ jobs:
     steps:
       - name: Lowercase repository owner
         shell: bash
-        run: echo "LOWERCASE_REPO_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+        run: |
+          echo "LOWERCASE_REPO_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "${GITHUB_ENV}"
 
       - name: Download Digests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
         with:
-          pattern: "${{ matrix.image.name }}-{linux,darwin}-{amd64,arm64}"
-          merge-multiple: true
+          name: ${{ matrix.image.name }}
           path: /tmp/${{ matrix.image.name }}
 
       - name: Ensure all platforms were built
@@ -281,10 +287,10 @@ jobs:
           fi
 
       - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
           registry: ghcr.io
           username: "${{ github.actor }}"
@@ -315,7 +321,7 @@ jobs:
 
       - name: Build successful
         id: build-success
-        if: ${{ !cancelled() && steps.merge.outcome == 'success' && steps.inspect.outcome == 'success' }}
+        if: ${{ always() && steps.merge.outcome == 'success' && steps.inspect.outcome == 'success' }}
         shell: bash
         run: |
           echo "message=🎉 ${{ matrix.image.name }} (${{ matrix.image.tags[0] }})" >> $GITHUB_OUTPUT
@@ -323,15 +329,15 @@ jobs:
 
       - name: Build failed
         id: build-failed
-        if: ${{ !cancelled() && (steps.merge.outcome == 'failure' || steps.inspect.outcome == 'failure') }}
+        if: ${{ always() && (steps.merge.outcome == 'failure' || steps.inspect.outcome == 'failure') }}
         shell: bash
         run: |
           echo "message=💥 ${{ matrix.image.name }} (${{ matrix.image.tags[0] }})" >> $GITHUB_OUTPUT
           echo "color=0xFF0000" >> $GITHUB_OUTPUT
 
       - name: Send Discord Webhook
-        uses: sarisia/actions-status-discord@v1
-        if: ${{ !cancelled() && inputs.sendNotifications == 'true' }}
+        uses: sarisia/actions-status-discord@5ddd3b114a98457dd80a39b2f00b6a998cd69008 # v1.15.3
+        if: ${{ always() && inputs.sendNotifications == 'true' }}
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
           title: ${{ steps.build-failed.outputs.message || steps.build-success.outputs.message }}
@@ -343,8 +349,13 @@ jobs:
     name: Build matrix success
     runs-on: ubuntu-latest
     needs: ["prepare", "merge"]
-    if: ${{ !cancelled() }}
+    if: ${{ always() }}
     steps:
+      - name: Lowercase repository owner
+        shell: bash
+        run: |
+          echo "LOWERCASE_REPO_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
       - name: Check build matrix status
         if: ${{ (inputs.appsToBuild != '' && inputs.appsToBuild != '[]') && (needs.merge.result != 'success' && needs.merge.result != 'skipped' && needs.prepare.result != 'success') }}
         shell: bash

@@ -1,5 +1,4 @@
 ---
-# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: Scheduled Release
 
 concurrency:
@@ -44,5 +43,5 @@ jobs:
   render-readme:
     name: Render Readme
     needs: build-images
-    uses: ./.github/workflows/render-readme.yaml
+    uses: mrkhachaturov/containers/.github/workflows/render-readme.yaml@main
     secrets: inherit

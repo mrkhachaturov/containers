@@ -1,5 +1,4 @@
 ---
-# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: "Simple Checks"
 
 on:
@@ -11,28 +10,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      - name: Get Changed Files
-        id: changed-files
-        uses: tj-actions/changed-files@v45
+      - name: Collect changed files
+        uses: dorny/paths-filter@7267a8516b6f92bdb098633497bad573efdbf271 # v2.12.0
+        id: filter
         with:
-          files_yaml: |
+          list-files: shell
+          filters: |
             cue:
-              - metadata.rules.cue
-              - apps/**/metadata.yaml
-              - apps/**/metadata.json
+              - added|modified: "apps/**/metadata.yaml"
+              - added|modified: "apps/**/metadata.json"
+              - added|modified: "./.github/checks/metadata.rules.cue"
 
       - name: Setup CUE
-        if: ${{ steps.changed-files.outputs.cue_any_changed == 'true' }}
-        uses: cue-lang/setup-cue@v1.0.1
+        if: ${{ steps.filter.outputs.cue == 'true' }}
+        uses: cue-lang/setup-cue@a93fa358375740cd8b0078f76355512b9208acb1 # v1.0.1
 
       # Run against all files to ensure they are tested if the cue schema is changed.
       - name: Validate image metadata
-        if: ${{ steps.changed-files.outputs.cue_any_changed == 'true' }}
+        if: ${{ steps.filter.outputs.cue == 'true' }}
         shell: bash
         run: |
-          find ./apps/ -name metadata.yaml | xargs -I {} cue vet --schema '#Spec' {} ./metadata.rules.cue
-          find ./apps/ -name metadata.json | xargs -I {} cue vet --schema '#Spec' {} ./metadata.rules.cue
+          find ./apps/ -name metadata.json | xargs -I {} cue vet --schema '#Spec' {} ./.github/checks/metadata.rules.cue
+          find ./apps/ -name metadata.yaml | xargs -I {} cue vet --schema '#Spec' {} ./.github/checks/metadata.rules.cue

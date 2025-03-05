@@ -1,15 +1,14 @@
 ---
-# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: "Render Readme"
 
 on:
   workflow_call:
     secrets:
       BOT_APP_ID:
-        description: The App ID of the GitHub App
+        description: The App ID of the GitHub App (found in app settings)
         required: true
-      BOT_APP_PRIVATE_KEY:
-        description: The private key of the GitHub App
+      BOT_JWT_PRIVATE_KEY:
+        description: The private key of the GitHub App, used for generating JWT tokens, generated in GitHub App settings page, uses the X.509 private key format
         required: true
 
 jobs:
@@ -17,39 +16,49 @@ jobs:
     name: Render README
     runs-on: ubuntu-latest
     steps:
-      - name: Generate Token
-        uses: actions/create-github-app-token@v1
-        id: app-token
+      - name: "Generate Short Lived OAuth App Token (ghs_*)"
+        uses: actions/create-github-app-token@21cfef2b496dd8ef5b904c159339626a10ad380e # v1.11.6
+        id: oauth-token
         with:
-          app-id: "${{ secrets.BOT_APP_ID }}"
-          private-key: "${{ secrets.BOT_APP_PRIVATE_KEY }}"
+          app-id: "${{ secrets.BOT_APP_ID }}" # $BOT_APP_ID is found in GitHub App main settings page
+          private-key: "${{ secrets.BOT_JWT_PRIVATE_KEY }}" # $BOT_JWT_PRIVATE_KEY is generated in GitHub App main settings page, uses the X.509 private key format
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
-          token: "${{ steps.app-token.outputs.token }}"
+          token: "${{ steps.oauth-token.outputs.token }}"
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@b64ffcaf5b410884ad320a9cfac8866006a109aa # v4.8.0
         with:
           python-version: 3.x
           cache: pip
 
       - name: Install Python Requirements
         shell: bash
-        run: pip install --requirement requirements.txt && pip freeze
+        run: pip install -r ./.github/scripts/requirements.txt && pip freeze
 
       - name: Render README
         env:
-          GITHUB_TOKEN: "${{ steps.app-token.outputs.token }}"
+          GITHUB_TOKEN: "${{ steps.oauth-token.outputs.token }}"
         shell: bash
-        run: python ./scripts/render-readme.py
+        run: python ./.github/scripts/render-readme.py
 
+      # below is yoinked from https://gist.github.com/swinton/03e84635b45c78353b1f71e41007fc7c
       - name: Commit Changes
-        shell: bash
+        env:
+          GITHUB_TOKEN: "${{ steps.oauth-token.outputs.token }}"
+          FILE_TO_COMMIT: "README.md"
+          DESTINATION_BRANCH: "main"
         run: |
-          git config --global user.name "bot-ross"
-          git config --global user.email "98030736+bot-ross[bot]@users.noreply.github.com"
-          git add ./README.md
-          git commit -m "chore: render README.md" || echo "No changes to commit"
-          git push origin || echo "No changes to push"
+          export TODAY=$( date -u '+%Y-%m-%d' )
+          export MESSAGE="chore: regenerate $FILE_TO_COMMIT for $TODAY"
+          export SHA=$( git rev-parse $DESTINATION_BRANCH:$FILE_TO_COMMIT )
+          export CONTENT=$( base64 -i $FILE_TO_COMMIT )
+          gh api --method PUT /repos/:owner/:repo/contents/$FILE_TO_COMMIT \
+            --field message="$MESSAGE" \
+            --field content="$CONTENT" \
+            --field encoding="base64" \
+            --field branch="$DESTINATION_BRANCH" \
+            --field sha="$SHA" \
+            || echo "No changes to push"

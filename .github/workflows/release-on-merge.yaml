@@ -1,5 +1,4 @@
 ---
-# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: Release on Merge
 
 concurrency:
@@ -7,12 +6,14 @@ concurrency:
   cancel-in-progress: false
 
 on:
+  workflow_dispatch:
   push:
     branches: ["main"]
     paths:
       - "apps/**"
-      - "scripts/templates/**"
-      - "!apps/**/metadata.yaml"
+      - ".github/scripts/templates/**"
+      # - "!apps/**/metadata.json"
+      # - "!apps/**/metadata.yaml"
       - "!apps/**/README.md"
 
 jobs:
@@ -37,5 +38,5 @@ jobs:
     name: Render Readme
     needs: build-images
     if: ${{ always() && needs.build-images.result != 'failure' }}
-    uses: ./.github/workflows/render-readme.yaml
+    uses: mrkhachaturov/containers/.github/workflows/render-readme.yaml@main
     secrets: inherit

@@ -1,5 +1,4 @@
 ---
-# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 name: "Get Changed Images"
 
 on:
@@ -17,31 +16,26 @@ jobs:
     name: Get Changed Images
     runs-on: ubuntu-latest
     outputs:
-      addedOrModified: "${{ steps.changed-files.outputs.all_changed_and_modified_files_count > 0 }}"
-      addedOrModifiedImages: "${{ steps.changed-containers.outputs.addedOrModifiedImages }}"
+      addedOrModified: "${{ steps.filter.outputs.addedOrModified }}"
+      addedOrModifiedImages: "${{ steps.filter-containers.outputs.addedOrModifiedImages }}"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      - name: Get Changed Files
-        id: changed-files
-        uses: tj-actions/changed-files@v45
+      - name: Collect changed files
+        uses: dorny/paths-filter@7267a8516b6f92bdb098633497bad573efdbf271 # v2.12.0
+        id: filter
         with:
-          files: apps/**
-          dir_names: true
-          dir_names_max_depth: 2
-          json: true
-          escape_json: false
+          list-files: json
+          filters: |
+            addedOrModified:
+              - added|modified: 'apps/*/**'
 
-      - if: ${{ steps.changed-files.outputs.all_changed_and_modified_files_count > 0 }}
-        name: Determine changed images
-        id: changed-containers
+      - name: Determine changed images
+        if: ${{ steps.filter.outputs.addedOrModified == 'true' }}
+        id: filter-containers
         shell: bash
         run: |
-          IMAGES=$( \
-              echo '${{ steps.changed-files.outputs.all_changed_and_modified_files }}' \
-                  | jq --raw-output 'map(sub("^apps/"; "")) | join(",")' \
-          )
-          echo "addedOrModifiedImages=${IMAGES}" >> $GITHUB_OUTPUT
+          PATHS='${{ steps.filter.outputs.addedOrModified_files }}'
+          OUTPUT=$(echo $PATHS | jq --raw-output -c 'map(. |= split("/")[1]) | unique | join(",")')
+          echo "addedOrModifiedImages=${OUTPUT}" >> $GITHUB_OUTPUT
